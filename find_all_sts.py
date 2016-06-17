@@ -1,4 +1,5 @@
 import networkx as nx
+from copy import deepcopy
 
 def sortedtup(a,b):
     return (min(a,b),max(a,b))
@@ -12,7 +13,7 @@ def contracted_edge_multi(G, edge, self_loops=True):
 
 # Modification of nx.contracted_nodes to work with keys in MultiGraphs
 # Here G must be a nx.MultiGraph
-# TODO: figure out what G.copy() does, to figure out where the bug was!!
+# TODO: figure out what G.copy() does (aka deepcopy(G)), to figure out where the bug was!!
 def contracted_nodes_multi(G, u, v, self_loops=True):
     H = G.copy()
     if H.is_directed():
@@ -41,13 +42,21 @@ class MinorGraph(nx.MultiGraph):
         super(self.__class__,self).__init__()
         if not G is None:
             self.add_nodes_from(G.nodes(data=True))
-            self.add_edges_from(G.edges(keys=True, data=True))
+            # See if G is MultiGraph or just graph
+            try:
+                self.add_edges_from(G.edges(keys=True, data=True))
+            except TypeError:
+                self.add_edges_from(G.edges(data=True))
 
     def add_edge(self,u,v,key=None,attr_dict=None,**attr):
         if key is None:
             super(self.__class__,self).add_edge(u,v,sortedtup(u,v),attr_dict,**attr)
         else:
             super(self.__class__,self).add_edge(u,v,key,attr_dict,**attr)
+
+    def remove_edge_hidden(self,u,v,key=None):
+        super(self.__class__,self).remove_edge(u,v,key=key)
+        self.hidden_edges.append(key)
 
     def get_hidden(self):
         return self.hidden_edges
@@ -67,9 +76,42 @@ class MinorGraph(nx.MultiGraph):
 
 # Here graph is a MinorGraph
 # Precondition: i < j and (i,j) is an edge of G
-def get_minor(graph,i,j):
+def get_minor(graph,i,j,key):
     contracted_graph = contracted_edge_multi(graph,(i,j),False)
     G = MinorGraph(contracted_graph)
-    G.set_hidden(graph.get_hidden())
-    G.append_hidden((i,j))
+    G.set_hidden(deepcopy(graph.get_hidden()))
+    G.append_hidden(key)
     return G
+
+def get_bridges(graph):
+    all_edges = graph.edges(keys=True,data=True)
+    for e in all_edges:
+        graph.remove_edge(*e[:-1])
+        removed_comps = nx.number_connected_components(graph)
+        graph.add_edge(*e) # Will maintain the original key associated with this edge
+        if nx.number_connected_components(graph) < removed_comps:
+            yield e
+
+def remove_bridges(graph):
+    all_bridges = get_bridges(graph)
+    for bridge in all_bridges:
+        graph.remove_edge_hidden(*bridge[:-1])
+
+def get_spanningtrees(graph):
+    graph_stack = [graph]
+    spanning_trees = []
+    while graph_stack:
+        # print "***", [H.to_string() for H in graph_stack]
+        G = graph_stack.pop()
+        remove_bridges(G)
+        edges_iter = G.edges_iter(data=True,keys=True)
+        e = next(edges_iter,None) # Know that e will not be a branch
+        # print "Next edge: ", e
+        if e is None:
+            spanning_trees.append(G)
+        else:
+            G1 = get_minor(G,*e[:-1]) # Will automatically make deep copy of G
+            G2 = G.copy()
+            G2.remove_edge(*e[:-1])
+            graph_stack += [G1, G2]
+    return [T.get_hidden() for T in spanning_trees]
