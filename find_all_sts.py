@@ -35,7 +35,6 @@ def contracted_nodes_multi(G, u, v, self_loops=True):
 
 class MinorGraph(nx.MultiGraph):
     hidden_edges = []
-    duplicates = dict()
 
     # Here G is an instance of an nx.MultiGraph
     def __init__(self,G=None):
@@ -43,39 +42,18 @@ class MinorGraph(nx.MultiGraph):
         if not G is None:
             self.add_nodes_from(G.nodes(data=True))
             self.add_edges_from(G.edges(keys=True, data=True))
-            self.duplicates = dict((sortedtup(*e),[sortedtup(*e)]) for e in G.edges())
 
     def add_edge(self,u,v,key=None,attr_dict=None,**attr):
         if key is None:
             super(self.__class__,self).add_edge(u,v,sortedtup(u,v),attr_dict,**attr)
         else:
             super(self.__class__,self).add_edge(u,v,key,attr_dict,**attr)
-        self.duplicates[(sortedtup(u,v))] = [sortedtup(u,v)]
-
-    def get_duplicates(self,dup=None):
-        if dup is None:
-            return self.duplicates
-        elif dup in self.duplicates:
-            return self.duplicates[dup]
-        else:
-            return None
-
-    def set_duplicates(self, dups):
-        self.duplicates = dups
 
     def get_hidden(self):
         return self.hidden_edges
 
     def set_hidden(self, hiddens):
         self.hidden_edges = hiddens
-
-    # Here dup is a tuple containing the (i,neighb) pair (in sorted order)
-    # third is a list of tuples representing edges
-    def add_duplicates(self, dup, third):
-        if dup in self.duplicates:
-            self.duplicates[dup] += third
-        else:
-            self.duplicates[dup] = third
 
     def append_hidden(self, hidden):
         self.hidden_edges.append(hidden)
@@ -84,9 +62,7 @@ class MinorGraph(nx.MultiGraph):
         s = "{Edges : "
         s += str(self.edges(keys=True))
         s += ", Hidden edges: "
-        s += str(self.hidden_edges)
-        s += ", Duplicates: "
-        s += str(self.duplicates) + "}"
+        s += str(self.hidden_edges)+ "}"
         return s
 
 # Here graph is a MinorGraph
@@ -96,12 +72,4 @@ def get_minor(graph,i,j):
     G = MinorGraph(contracted_graph)
     G.set_hidden(graph.get_hidden())
     G.append_hidden((i,j))
-    G.set_duplicates(graph.get_duplicates())
-
-    # i_neighbs = set(graph.neighbors(i)) - {j}
-    j_neighbs = set(graph.neighbors(j)) - {i}
-    # for neighb in i_neighbs:
-    #     G.add_duplicates(sortedtup(i,neighb),G.get_duplicates(sortedtup(i,neighb)))
-    for neighb in j_neighbs:
-        G.add_duplicates(sortedtup(i,neighb),G.get_duplicates(sortedtup(j,neighb)))
     return G
