@@ -24,7 +24,7 @@ graph.add_edge(1,4)
 graph.add_edge(2,4)
 graph.add_edge(3,4)
 
-K5 = nx.complete_graph(8)
+K5 = nx.complete_graph(7)
 G = fsts.MinorGraph(K5)
 print G.to_string()
 trees = fsts.get_spanningtrees(G)
