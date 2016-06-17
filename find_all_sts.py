@@ -1,5 +1,6 @@
 import networkx as nx
 from copy import deepcopy
+import time
 
 def sortedtup(a,b):
     return (min(a,b),max(a,b))
@@ -77,11 +78,14 @@ class MinorGraph(nx.MultiGraph):
 # Here graph is a MinorGraph
 # Precondition: i < j and (i,j) is an edge of G
 def get_minor(graph,i,j,key):
+    start_time = time.clock()
     contracted_graph = contracted_edge_multi(graph,(i,j),False)
+    second_time = time.clock()
     G = MinorGraph(contracted_graph)
     G.set_hidden(deepcopy(graph.get_hidden()))
     G.append_hidden(key)
-    return G
+    third_time = time.clock()
+    return G, second_time - start_time, third_time - second_time
 
 def get_bridges(graph):
     all_edges = graph.edges(keys=True,data=True)
@@ -93,25 +97,38 @@ def get_bridges(graph):
             yield e
 
 def remove_bridges(graph):
+    start_time = time.clock()
     all_bridges = get_bridges(graph)
     for bridge in all_bridges:
         graph.remove_edge_hidden(*bridge[:-1])
+    end_time = time.clock()
+    return end_time - start_time
 
 def get_spanningtrees(graph):
+    timedict = dict()
+    timedict['remove_bridges'] = 0.0
+    timedict['minor_taking'] = 0.0
+    timedict['copy_taking'] = 0.0
+    timedict['iterations'] = 0
+    start_total = time.clock()
     graph_stack = [graph]
     spanning_trees = []
     while graph_stack:
+        timedict['iterations'] += 1
         # print "***", [H.to_string() for H in graph_stack]
         G = graph_stack.pop()
-        remove_bridges(G)
+        timedict['remove_bridges'] += remove_bridges(G)
         edges_iter = G.edges_iter(data=True,keys=True)
         e = next(edges_iter,None) # Know that e will not be a branch
         # print "Next edge: ", e
         if e is None:
             spanning_trees.append(G)
         else:
-            G1 = get_minor(G,*e[:-1]) # Will automatically make deep copy of G
+            G1, minortime, copytime = get_minor(G,*e[:-1]) # Will automatically make deep copy of G
+            timedict['minor_taking'] += minortime
+            timedict['copy_taking'] += copytime
             G2 = G.copy()
             G2.remove_edge(*e[:-1])
             graph_stack += [G1, G2]
-    return [T.get_hidden() for T in spanning_trees]
+    timedict['total'] = time.clock() - start_total
+    return (timedict, [T.get_hidden() for T in spanning_trees])
